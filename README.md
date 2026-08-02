@@ -31,21 +31,28 @@ It finishes with **READY** and a summary. Show that to your instructor.
 
 Safe to run again if your Wi-Fi drops halfway; it skips whatever is already done.
 
-## 2. Set up the console on your laptop
+## 2. Get the console onto your laptop
 
 ```bash
 git clone https://github.com/sjaraza/shinelabs-robot-dashboard.git
 cd shinelabs-robot-dashboard
-pip install -r requirements.txt
+python3 launch.py
 ```
 
-On Windows use `py` instead of `python3` throughout.
+That is the whole thing — the same three lines on macOS, Windows and Linux.
+`launch.py` sets everything up the first time (about half a minute) and starts
+instantly after that.
 
-## 3. Run it
+On Windows the interpreter is usually called `py`, so the last line is
+`py launch.py`.
+
+Something wrong? Ask it to check without changing anything:
 
 ```bash
-python3 -m robot_console
+python3 launch.py --check
 ```
+
+## 3. Connect
 
 Type your robot's name (for example `zoomer.local`), the username and password
 you chose in Raspberry Pi Imager, and press **Connect**.
@@ -94,12 +101,21 @@ forcing a servo against a stop makes it draw current and get hot.
 ### Layout
 
 ```
+launch.py                sets up and starts the console. One file, all platforms.
 robot_agent.py           runs ON the robot. Uploaded fresh on every connect.
 robot_console/
   transport.py           paramiko SSH + newline-delimited JSON
   app.py                 the Tkinter GUI
 setup.sh                 provisioning, run on the robot
 ```
+
+**One launcher, not one per OS.** `launch.py` is Python rather than a shell
+script because the logic is identical on every platform, so there should be one
+copy of it. Three shell scripts would mean three dialects and three sets of bugs,
+of which only one would ever get tested. It finds the interpreter, checks tkinter
+(bundled on macOS and Windows, a separate package on Linux), creates a `.venv`
+with `--system-site-packages` so tkinter stays visible, works around PEP 668 on
+Debian and Ubuntu, installs paramiko once, and then starts the console.
 
 ### Protocol
 
@@ -163,6 +179,10 @@ python3 robot_agent.py       # then type JSON lines on stdin
 ✅ Protocol tested end to end against the simulated agent: hello, telemetry,
 clamping, the `-1` timeout path, unknown commands, the camera failure path,
 watchdog firing after 1.5 s, and a clean exit on EOF.
+
+✅ `launch.py` tested from clean and warm states, and with `--check`, which
+provably changes nothing: creates the venv, installs paramiko 5.0.0, and keeps
+tkinter visible through `--system-site-packages`.
 
 ✅ GUI smoke-tested headlessly with synthetic telemetry, including a real PNG
 through `PhotoImage`, sim-mode warning, disconnect reset, and the low-battery and
