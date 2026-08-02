@@ -52,7 +52,32 @@ Something wrong? Ask it to check without changing anything:
 python3 launch.py --check
 ```
 
-## 3. Connect
+## 3. Try it straight from the robot
+
+You do not need the console to make the robot do things. Over SSH:
+
+```bash
+python3 ~/robot_play.py
+```
+
+A menu: read the distance sensor, watch the grayscale sensors, check the battery,
+drive, steer, aim the camera, take a photo, drive live with `WASD`.
+
+Every option **prints the Python it is about to run** before running it, so the
+menu doubles as a tour of the library you will be writing against in later
+lectures. It is meant to be read too: `less ~/robot_play.py`.
+
+**Seeing your photos.** The robot has no screen, so option **8** turns it into a
+little web server and gives you a link — open it on your laptop:
+
+```
+http://zoomer.local:8000/
+```
+
+That beats copying files about, and one line of Python being enough to serve a
+website is worth knowing.
+
+## 4. Connect the console
 
 Type your robot's name (for example `zoomer.local`), the username and password
 you chose in Raspberry Pi Imager, and press **Connect**.
@@ -103,6 +128,7 @@ forcing a servo against a stop makes it draw current and get hot.
 ```
 launch.py                sets up and starts the console. One file, all platforms.
 robot_agent.py           runs ON the robot. Uploaded fresh on every connect.
+robot_play.py            menu-driven playground, run on the robot over SSH
 robot_console/
   transport.py           paramiko SSH + newline-delimited JSON
   app.py                 the Tkinter GUI
@@ -162,6 +188,12 @@ worse than one that fails.
 there through `fileDB`, the directory is absent on a fresh card, and creating it
 needs root — so an unprivileged agent dies with `PermissionError` on the first
 `Picarx()`. `setup.sh` fixes it; it is not optional.
+
+**The playground is a fallback and a teaching tool.** `robot_play.py` needs no
+laptop-side setup at all, so it works when the console does not — and it prints
+each API call, which the GUI cannot. It is downloaded to `~` by `setup.sh`.
+Photos are viewed by serving `~/photos` with `http.server` rather than `scp`:
+one command, a clickable link, and nothing to install.
 
 ### Testing without a robot
 

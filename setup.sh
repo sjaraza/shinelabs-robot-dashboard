@@ -68,18 +68,18 @@ printf '  user   : %s\n' "$USER"
 
 if [[ ! -e /proc/device-tree/model ]] || ! grep -qi raspberry /proc/device-tree/model 2>/dev/null; then
   warn "this does not look like a Raspberry Pi — continuing anyway"
-fi
+  fi
 
 # --------------------------------------------------------------------------- #
 if [[ $DO_VERIFY_ONLY -eq 0 ]]; then
 
-  step "1/6  System packages"
+  step "1/7  System packages"
   if [[ -f /var/lib/apt/periodic/update-success-stamp ]] &&
      [[ $(( $(date +%s) - $(stat -c %Y /var/lib/apt/periodic/update-success-stamp) )) -lt 86400 ]]; then
     skip "apt index is less than a day old"
-  else
+    else
     run sudo apt-get update -qq || warn "apt update had problems; continuing"
-  fi
+    fi
   MISSING_PKGS=()
   for p in git python3-pip python3-setuptools python3-smbus i2c-tools; do
     dpkg -s "$p" >/dev/null 2>&1 || MISSING_PKGS+=("$p")
@@ -90,7 +90,7 @@ if [[ $DO_VERIFY_ONLY -eq 0 ]]; then
     run sudo apt-get install -y "${MISSING_PKGS[@]}" || bad "could not install: ${MISSING_PKGS[*]}"
   fi
 
-  step "2/6  Enable I2C"
+  step "2/7  Enable I2C"
   # The Robot HAT's ADC and PWM live on I2C. Without this, nothing reads.
   if [[ -e /dev/i2c-1 ]]; then
     skip "/dev/i2c-1 exists"
@@ -100,7 +100,7 @@ if [[ $DO_VERIFY_ONLY -eq 0 ]]; then
     warn "raspi-config not found — enable I2C by hand if /dev/i2c-1 stays missing"
   fi
 
-  step "3/6  SunFounder libraries"
+  step "3/7  SunFounder libraries"
   for entry in "${REPOS[@]}"; do
     IFS='|' read -r name branch url <<<"$entry"
     mod="${name//-/_}"
@@ -129,7 +129,7 @@ if [[ $DO_VERIFY_ONLY -eq 0 ]]; then
     fi
   done
 
-  step "4/6  Calibration directory"
+  step "4/7  Calibration directory"
   # picarx writes /opt/picar-x/picar-x.conf via fileDB. The directory does not
   # exist on a fresh card and creating it needs root, so an unprivileged agent
   # dies with PermissionError on the very first Picarx(). This is that fix.
@@ -141,7 +141,7 @@ if [[ $DO_VERIFY_ONLY -eq 0 ]]; then
     ok "/opt/picar-x is now writable by $USER"
   fi
 
-  step "5/6  Speaker (optional)"
+  step "5/7  Speaker (optional)"
   if [[ $DO_AUDIO -eq 1 ]]; then
     if [[ -d "$HOME/robot-hat" ]]; then
       warn "i2samp.sh is interactive and will offer to reboot — answer its prompts"
@@ -153,7 +153,20 @@ if [[ $DO_VERIFY_ONLY -eq 0 ]]; then
     skip "skipped — the dashboard needs no sound. Re-run with --audio if you want it"
   fi
 
-  step "6/6  First hardware init"
+  step "6/7  Playground script"
+  # A menu-driven script students run over SSH to try each part of the robot.
+  # Fetched here so it is simply present after setup, rather than being another
+  # command to get right in front of a class.
+  PLAY_URL="https://raw.githubusercontent.com/sjaraza/shinelabs-robot-dashboard/main/robot_play.py"
+  if [[ -f "$HOME/robot_play.py" ]]; then
+    skip "$HOME/robot_play.py already downloaded"
+  elif run curl -fsSL -o "$HOME/robot_play.py" "$PLAY_URL"; then
+    ok "downloaded robot_play.py  —  run it with: python3 ~/robot_play.py"
+  else
+    warn "could not download robot_play.py (not fatal)"
+  fi
+
+  step "7/7  First hardware init"
   # Constructing Picarx once here creates the config file and centres the servos,
   # so the first thing a student does is not also the first thing to fail.
   warn "the servos will move — hold the car or put it on the floor"
@@ -218,7 +231,9 @@ ssid="$(iw dev wlan0 link 2>/dev/null | sed -n 's/.*SSID: //p')"
 printf '\n'
 if [[ $FAILED -eq 0 ]]; then
   printf '  %s%sREADY%s  — %s is set up.\n' "$GRN" "$BOLD" "$RST" "$(hostname)"
-  printf '  Show this screen to your instructor, then open the Robot Console on your laptop.\n\n'
+  printf '  Show this screen to your instructor.\n\n'
+  printf '  Try the robot from here:  %spython3 ~/robot_play.py%s\n' "$BOLD" "$RST"
+  printf '  Or open the Robot Console on your laptop.\n\n'
 else
   printf '  %s%sNOT READY%s — see the %s✗%s lines above.\n' "$RED" "$BOLD" "$RST" "$RED" "$RST"
   printf '  Safe to run again: %sbash setup.sh%s\n\n' "$BOLD" "$RST"
