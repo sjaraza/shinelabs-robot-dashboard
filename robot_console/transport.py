@@ -103,7 +103,11 @@ class RobotLink:
         transport = client.get_transport()
         transport.set_keepalive(15)         # notice a dead link rather than hanging
         channel = transport.open_session()
-        channel.get_pty(False)              # no PTY: keeps stdout free of terminal noise
+        # Deliberately NO get_pty(). paramiko allocates no PTY unless asked, which
+        # is what we want: a PTY would merge stderr into stdout and echo input,
+        # both of which would corrupt the JSON protocol. (An earlier version called
+        # get_pty(False) -- but its first argument is the terminal NAME, not a
+        # boolean, so that raised TypeError: object of type 'bool' has no len().)
         channel.exec_command(f"python3 -u {AGENT_REMOTE}")
         self._channel = channel
 
@@ -151,13 +155,18 @@ class RobotLink:
                 time.sleep(0.15)          # let it land before the channel dies
             except Exception:  # noqa: BLE001
                 pass
+        # Stop the loops BEFORE closing, then leave the references in place. The
+        # loops each check _running and then touch _channel; setting it to None
+        # here would race them into AttributeError, which surfaced as spurious
+        # "send failed" log lines at the exact moment a student closes the window.
         self._running = False
+        time.sleep(KEEPALIVE_S + 0.1)      # let the loops notice and exit
         for closer in (self._channel, self._client):
             try:
-                closer.close()
+                if closer is not None:
+                    closer.close()
             except Exception:  # noqa: BLE001
                 pass
-        self._channel = self._client = None
         self.on_state("offline", None)
 
     # --- loops --------------------------------------------------------- #
