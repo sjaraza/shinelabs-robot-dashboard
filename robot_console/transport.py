@@ -27,8 +27,15 @@ try:
 except ImportError:  # surfaced by the GUI with an install hint
     paramiko = None  # type: ignore[assignment]
 
+# Local path: pathlib, so it is correct on Windows, macOS and Linux alike.
 AGENT_LOCAL = Path(__file__).resolve().parent.parent / "robot_agent.py"
-AGENT_REMOTE = "/tmp/shinelabs_agent.py"
+
+# Remote path: this is a path ON THE ROBOT, which is always Linux, so the
+# student's OS is irrelevant to it. It is resolved from the robot's own home
+# directory at connect time rather than hardcoded, because /tmp is not guaranteed
+# to exist or be writable on a hardened system. /tmp is the fallback.
+AGENT_REMOTE_NAME = ".shinelabs_agent.py"
+AGENT_REMOTE_FALLBACK = "/tmp/shinelabs_agent.py"
 
 KEEPALIVE_S = 0.5      # must be comfortably under the agent's watchdog
 CONNECT_TIMEOUT_S = 12.0
@@ -52,6 +59,7 @@ class RobotLink:
         self.on_log = on_log
         self._client = None
         self._channel = None
+        self._agent_remote = AGENT_REMOTE_FALLBACK
         self._out: queue.Queue[dict] = queue.Queue()
         self._threads: list[threading.Thread] = []
         self._running = False
@@ -108,7 +116,9 @@ class RobotLink:
         # both of which would corrupt the JSON protocol. (An earlier version called
         # get_pty(False) -- but its first argument is the terminal NAME, not a
         # boolean, so that raised TypeError: object of type 'bool' has no len().)
-        channel.exec_command(f"python3 -u {AGENT_REMOTE}")
+        # python3 by absolute-ish name: the robot's PATH always has it, and we
+        # never exec the file directly, so a noexec /tmp would not matter either.
+        channel.exec_command(f"python3 -u {self._agent_remote}")
         self._channel = channel
 
         self._running = True
@@ -131,15 +141,24 @@ class RobotLink:
         try:
             sftp = client.open_sftp()
             try:
-                sftp.put(str(AGENT_LOCAL), AGENT_REMOTE)
-                sftp.chmod(AGENT_REMOTE, 0o755)
+                # normalize(".") is the SFTP session's working directory, i.e. the
+                # robot's home. Posix join, not os.path.join: the remote is Linux
+                # even when this code is running on Windows, where os.path.join
+                # would produce a backslash.
+                try:
+                    home = sftp.normalize(".").rstrip("/")
+                    self._agent_remote = f"{home}/{AGENT_REMOTE_NAME}"
+                except Exception:  # noqa: BLE001
+                    self._agent_remote = AGENT_REMOTE_FALLBACK
+                sftp.put(str(AGENT_LOCAL), self._agent_remote)
+                sftp.chmod(self._agent_remote, 0o644)
             finally:
                 sftp.close()
         except Exception as exc:  # noqa: BLE001
             raise TransportError(
                 f"Connected, but could not upload the agent: {type(exc).__name__}: {exc}"
             ) from exc
-        self.on_log(f"uploaded agent -> {AGENT_REMOTE}")
+        self.on_log(f"uploaded agent -> {self._agent_remote}")
 
     # ------------------------------------------------------------------ #
 
