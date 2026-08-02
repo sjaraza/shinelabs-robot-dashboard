@@ -1,0 +1,2 @@
+# The only third-party dependency. Tkinter ships with Python.
+paramiko>=3.4
